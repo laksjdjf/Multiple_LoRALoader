@@ -56,7 +56,7 @@ def create_class(num_loras, model_only=False):
                 strength_model = strength_models[i] * scale
                 apply = applys[i]
 
-                print(lora_name, strength_model, apply)
+                #print(lora_name, strength_model, apply)
 
                 if apply:
                     model, clip = self.load_lora(model, clip, lora_name, strength_model, strength_model, i)
