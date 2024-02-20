@@ -11,6 +11,10 @@ def create_class(num_loras, model_only=False):
             required = {"model": ("MODEL", )}
             if not model_only:
                 required["clip"] = ("CLIP", )
+
+            required["normalize"] = ("BOOLEAN", {"default": False})
+            required["normalize_sum"] = ("FLOAT", {"default": 1.0, "min": -50.0, "max": 50.0, "step": 0.01})
+            
             for i in range(num_loras):
                 required[f"lora_name_{i}"] = (["None"] + folder_paths.get_filename_list("loras"), )
                 required[f"strength_model_{i}"] = ("FLOAT", {"default": 1.0, "min": -20.0, "max": 20.0, "step": 0.01})
@@ -22,18 +26,39 @@ def create_class(num_loras, model_only=False):
         FUNCTION = "multiple_lora_loader"
         CATEGORY = "multiple_lora_loader"
 
-        def multiple_lora_loader(self, model, **kwargs):
+        def multiple_lora_loader(self, **kwargs):
 
+            model = kwargs.get("model")
             clip = kwargs.get("clip", None)
+
+            normalize = kwargs.get("normalize")
+            normalize_sum = kwargs.get("normalize_sum")
+
+            lora_names = [kwargs.get(f"lora_name_{i}") for i in range(num_loras)]
+            strength_models = [kwargs.get(f"strength_model_{i}") for i in range(num_loras)]
+            applys = [kwargs.get(f"apply_{i}") for i in range(num_loras)]
+
+            strength_sum = 0
+            for i in range(num_loras):
+                if lora_names[i] == "None":
+                    applys[i] = False
+                
+                if applys[i]:
+                    strength_sum += strength_models[i]
+
+            if normalize:
+                scale = normalize_sum / strength_sum
+            else:
+                scale = 1.0
             
             for i in range(num_loras):
-                lora_name = kwargs.get(f"lora_name_{i}")
-                strength_model = kwargs.get(f"strength_model_{i}")
-                apply = kwargs.get(f"apply_{i}")
+                lora_name = lora_names[i]
+                strength_model = strength_models[i] * scale
+                apply = applys[i]
 
                 print(lora_name, strength_model, apply)
 
-                if apply and lora_name is not None:
+                if apply:
                     model, clip = self.load_lora(model, clip, lora_name, strength_model, strength_model, i)
 
             if model_only:
@@ -43,12 +68,6 @@ def create_class(num_loras, model_only=False):
         
         def load_lora(self, model, clip, lora_name, strength_model, strength_clip, index):
             if strength_model == 0 and strength_clip == 0:
-                return (model, clip)
-            
-            if lora_name == "None":
-                temp = self.loaded_lora[index]
-                self.loaded_lora[index] = None
-                del temp
                 return (model, clip)
 
             lora_path = folder_paths.get_full_path("loras", lora_name)
